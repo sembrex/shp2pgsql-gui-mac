@@ -1,0 +1,6 @@
+/.DS_Store
+/build
+/dist
+*.spec
+*.sublime-project
+*.sublime-workspace
