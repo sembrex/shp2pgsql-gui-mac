@@ -1,6 +1,7 @@
 /.DS_Store
 /build
 /dist
+*.pyc
 *.spec
 *.sublime-project
 *.sublime-workspace

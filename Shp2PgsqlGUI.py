@@ -1,15 +1,15 @@
 #!/usr/local/bin/python3
 
 import sys, os, threading, psycopg2, time
-from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLineEdit, QPushButton, QTableWidget, QFileDialog, QTableWidgetItem, QVBoxLayout, QFormLayout, QGridLayout, QPlainTextEdit, QLabel, QMessageBox
-from PyQt5.QtGui import QFont, QFontDatabase
+from PyQt5 import QtCore, QtWidgets, QtGui
 from subprocess import check_output
+from mainwindow import Ui_MainWindow
 
-class Shp2Pgsql(QMainWindow):
+class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
     """docstring for Shp2Pgsql"""
     def __init__(self):
         super(Shp2Pgsql, self).__init__()
+        self.setupUi(self)
 
         path = os.environ['PATH']
         os.environ['PATH'] = '/usr/local/bin:/usr/bin:{}'.format(path)
@@ -20,90 +20,18 @@ class Shp2Pgsql(QMainWindow):
         self.file_count = 0
 
     def initUi(self):
-        self.setWindowTitle('Shp2PgsqlGUI')
-        self.resize(500, 700)
-
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        top_widget = QWidget()
-        middle_widget = QWidget()
-        bottom_widget = QWidget()
-
-        self.fld_host = QLineEdit('localhost')
-        self.fld_host.setPlaceholderText('Host')
-        self.fld_port = QLineEdit('5432')
-        self.fld_port.setPlaceholderText('Port')
-        self.fld_user = QLineEdit()
-        self.fld_user.setPlaceholderText('Username')
-        self.fld_pass = QLineEdit()
-        self.fld_pass.setPlaceholderText('Password')
-        self.fld_dbname = QLineEdit()
-        self.fld_dbname.setPlaceholderText('Database')
-
-        btn_connect = QPushButton('Test &Connection')
-        btn_connect.resize(btn_connect.sizeHint())
-        btn_connect.setToolTip('Connect to database')
-        btn_connect.clicked.connect(self.connect)
-
-        self.btn_import = QPushButton('&Import')
-        self.btn_import.resize(self.btn_import.sizeHint())
-        self.btn_import.setToolTip('Import Shapefile to PostgreSQL database')
+        self.btn_test.clicked.connect(self.connect)
         self.btn_import.clicked.connect(self.execute)
-
-        lbl_file = QLabel('File list:')
-        self.tbl_file = QTableWidget()
-
-        self.btn_add = QPushButton('&Add File')
         self.btn_add.clicked.connect(self.add_file)
+        self.btn_clear.clicked.connect(self.clear_table)
+        self.btn_save_log.clicked.connect(self.save_log)
 
-        self.btn_exit = QPushButton('&Quit')
-        self.btn_exit.resize(self.btn_exit.sizeHint())
-        self.btn_exit.clicked.connect(self.close)
+        self.act_add.triggered.connect(self.add_file)
+        self.act_about.triggered.connect(self.show_about)
 
-        lbl_log = QLabel('Log:')
-
-        self.txt_log = QPlainTextEdit()
-        self.txt_log.setReadOnly(True)
-        fixed_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        fixed_font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont)
         self.txt_log.setFont(fixed_font)
-
-
-        main_layout = QVBoxLayout(central_widget)
-        top_layout = QFormLayout(top_widget)
-        middle_layout = QVBoxLayout(middle_widget)
-        bottom_layout = QGridLayout(bottom_widget)
-
-        top_layout.addRow(QLabel('Host'), self.fld_host)
-        top_layout.addRow(QLabel('Port'), self.fld_port)
-        top_layout.addRow(QLabel('Username'), self.fld_user)
-        top_layout.addRow(QLabel('Password'), self.fld_pass)
-        top_layout.addRow(QLabel('Database'), self.fld_dbname)
-        top_layout.addWidget(btn_connect)
-
-        middle_layout.addWidget(lbl_file)
-        middle_layout.addWidget(self.tbl_file)
-
-        bottom_layout.addWidget(self.btn_add, 0, 0)
-        bottom_layout.addWidget(self.btn_import, 0, 1)
-        bottom_layout.addWidget(self.btn_exit, 1, 0, 1, 2)
-        bottom_layout.addWidget(lbl_log, 2, 0, 1, 2)
-        bottom_layout.addWidget(self.txt_log, 3, 0, 1, 2)
-
-        main_layout.addWidget(top_widget)
-        main_layout.addWidget(middle_widget)
-        main_layout.addWidget(bottom_widget)
-
-        self.txt_log.insertPlainText(
-"""
-┌──────────────────────────────────────┐
-│                                      │
-│        Shp2PgsqlGUI for macOS        │
-│                                      │
-│          by Rifa'i M. Hanif          │
-│                                      │
-└──────────────────────────────────────┘
-"""
-        )
+        self.txt_log.insertPlainText("========== Shp2PgsqlGUI for macOS ==========\n")
 
         self.show()
 
@@ -111,7 +39,7 @@ class Shp2Pgsql(QMainWindow):
         host = self.fld_host.text()
         port = self.fld_port.text()
         user = self.fld_user.text()
-        password = self.fld_pass.text()
+        password = self.fld_password.text()
         dbname = self.fld_dbname.text()
 
         output = kwargs.get('output', True)
@@ -127,20 +55,38 @@ class Shp2Pgsql(QMainWindow):
 
     def add_file(self):
         home = os.path.expanduser('~')
-        files, _ = QFileDialog.getOpenFileNames(self, 'Choose shape file to import', home, 'ESRI Shapefile (*.shp)')
+        files, _ = QtWidgets.QFileDialog.getOpenFileNames(self, 'Choose shape file to import', home, 'ESRI Shapefiles (*.shp)')
         if len(files):
             self.tbl_file.setRowCount(len(files))
-            self.tbl_file.setColumnCount(5)
-            self.tbl_file.setHorizontalHeaderLabels(['File', 'Schema', 'Table', 'Geometry Column', 'SRID'])
 
             for i, file in enumerate(files):
-                self.tbl_file.setItem(i, 0, QTableWidgetItem(file))
-                self.tbl_file.setItem(i, 1, QTableWidgetItem('public'))
-                self.tbl_file.setItem(i, 2, QTableWidgetItem(os.path.basename(os.path.splitext(file)[0]).lower()))
-                self.tbl_file.setItem(i, 3, QTableWidgetItem('geom'))
-                self.tbl_file.setItem(i, 4, QTableWidgetItem('4326'))
+                self.tbl_file.setItem(i, 0, QtWidgets.QTableWidgetItem(file))
+                self.tbl_file.setItem(i, 1, QtWidgets.QTableWidgetItem('public'))
+                self.tbl_file.setItem(i, 2, QtWidgets.QTableWidgetItem(os.path.basename(os.path.splitext(file)[0]).lower()))
+                self.tbl_file.setItem(i, 3, QtWidgets.QTableWidgetItem('geom'))
+                self.tbl_file.setItem(i, 4, QtWidgets.QTableWidgetItem('4326'))
 
             self.tbl_file.resizeColumnsToContents()
+
+    def clear_table(self):
+        self.tbl_file.clearContents()
+        self.tbl_file.setRowCount(0)
+        self.tbl_file.resizeColumnsToContents()
+
+    def save_log(self):
+        home = os.path.expanduser('~')
+        file, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save As', home, 'Text File (*.txt)')
+        if file:
+            file = open(file, 'w')
+            file.write(self.txt_log.toPlainText())
+            file.close()
+            self.alert('Success', 'Log saved', 'info')
+
+    def show_about(self):
+        about = QtWidgets.QMessageBox(self)
+        about.setWindowTitle('About')
+        about.setText('Shp2PgsqlGUI for macOS\n\nThis software helps you operating shp2pgsql in GUI mode.')
+        about.exec_()
 
     def execute(self):
         try:
@@ -164,7 +110,7 @@ class Shp2Pgsql(QMainWindow):
 
             self.btn_import.setDisabled(True)
             self.btn_add.setDisabled(True)
-            self.btn_exit.setDisabled(True)
+            self.btn_clear.setDisabled(True)
 
             for x in range(0, self.file_count):
                 path = self.tbl_file.item(x, 0).text()
@@ -182,42 +128,42 @@ class Shp2Pgsql(QMainWindow):
 
     def alert(self, title, text, type):
         if type is 'warning':
-            icon = QMessageBox.Warning
+            icon = QtWidgets.QMessageBox.Warning
         elif type is 'critical':
-            icon = QMessageBox.Critical
+            icon = QtWidgets.QMessageBox.Critical
         else:
-            icon = QMessageBox.Information
+            icon = QtWidgets.QMessageBox.Information
 
-        msgbox = QMessageBox(icon, title, text, QMessageBox.Ok)
+        msgbox = QtWidgets.QMessageBox(icon, title, text, QtWidgets.QMessageBox.Ok)
         msgbox.exec_()
 
     def write_log(self, text):
         self.txt_log.insertPlainText(text + '\n')
         self.txt_log.ensureCursorVisible()
 
-    @pyqtSlot(str)
+    @QtCore.pyqtSlot(str)
     def write_log_slot(self, text):
         self.txt_log.insertPlainText(text + '\n')
         self.txt_log.ensureCursorVisible()
 
-    @pyqtSlot()
+    @QtCore.pyqtSlot()
     def finish(self):
         self.counter += 1
         if self.counter >= self.file_count:
             self.btn_import.setDisabled(False)
             self.btn_add.setDisabled(False)
-            self.btn_exit.setDisabled(False)
+            self.btn_clear.setDisabled(False)
             self.connection.close()
             self.connection = None
             self.write_log('Jobs done !!!')
 
 
 
-class importThread(QThread):
+class importThread(QtCore.QThread):
     """docstring for importThread"""
 
-    write_log = pyqtSignal(str)
-    finished = pyqtSignal()
+    write_log = QtCore.pyqtSignal(str)
+    finished = QtCore.pyqtSignal()
 
     def __init__(self, connection, path, schema, table, geom, srid):
         super(importThread, self).__init__()
@@ -256,6 +202,6 @@ class importThread(QThread):
 
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     w = Shp2Pgsql()
     sys.exit(app.exec_())
