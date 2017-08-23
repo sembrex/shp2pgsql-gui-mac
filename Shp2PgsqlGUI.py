@@ -365,7 +365,7 @@ class exportThread(QtCore.QThread):
             output = check_output(['pgsql2shp', '-h', self.host, '-p', self.port, '-u', self.user, '-P', self.password, '-g', self.geom, '-f', self.dest, self.dbname, '{}.{}'.format(self.schema, self.table)])
             self.write_log.emit(output)
         except Exception:
-            self.write_log.emit("An error occured during {} import.".format(self.path))
+            self.write_log.emit("An error occured during {}.{} export.".format(self.schema, self.table))
 
         self.finished.emit(2)
 
