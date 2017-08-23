@@ -65,6 +65,7 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.alert('Success', 'Connected to database', 'info')
             self.write_log('Connected to database {} on {}:{}'.format(dbname, host, port))
         except Exception as e:
+            self.write_log(str(e))
             if output:
                 self.alert('Error', 'Could not conect to database', 'critical')
 
@@ -335,7 +336,8 @@ class importThread(QtCore.QThread):
             self.write_log.emit(cur.statusmessage)
             cur.close()
             self.write_log.emit("{} successfully imported to {}.{}".format(self.path, self.schema, self.table))
-        except Exception:
+        except Exception as e:
+            self.write_log(str(e))
             self.write_log.emit("An error occured during {} import.".format(self.path))
 
         self.finished.emit(1)
@@ -364,7 +366,8 @@ class exportThread(QtCore.QThread):
         try:
             output = check_output(['pgsql2shp', '-h', self.host, '-p', self.port, '-u', self.user, '-P', self.password, '-g', self.geom, '-f', self.dest, self.dbname, '{}.{}'.format(self.schema, self.table)])
             self.write_log.emit(output)
-        except Exception:
+        except Exception as e:
+            self.write_log(str(e))
             self.write_log.emit("An error occured during {}.{} export.".format(self.schema, self.table))
 
         self.finished.emit(2)
