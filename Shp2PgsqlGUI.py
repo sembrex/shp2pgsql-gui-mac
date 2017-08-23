@@ -177,6 +177,10 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
         about.exec_()
 
     def import_(self):
+        if not self.tbl_file.rowCount():
+            self.alert('Error', 'No file to import', 'critical')
+            return
+
         try:
             check_output(['shp2pgsql', '-?'])
         except Exception:
@@ -216,6 +220,10 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
             self.write_log(str(e))
 
     def export_(self):
+        if not self.tbl_table.rowCount():
+            self.alert('Error', 'No table to export', 'critical')
+            return
+
         try:
             check_output(['pgsql2shp', '-?'])
         except Exception:
