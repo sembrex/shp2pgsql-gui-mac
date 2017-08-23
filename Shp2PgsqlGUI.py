@@ -180,7 +180,7 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
         try:
             check_output(['shp2pgsql', '-?'])
         except Exception:
-            self.write_log('shp2pgsql command not found.\nRun "brew install postgis" in terminal to install.')
+            self.write_log('ERROR: shp2pgsql command not found. Run "brew install postgis" in terminal to install.')
             self.alert('Error', 'shp2pgsql command not found.\nRun "brew install postgis" in terminal to install.', 'critical')
 
         try:
@@ -219,7 +219,7 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
         try:
             check_output(['pgsql2shp', '-?'])
         except Exception:
-            self.write_log('pgsql2shp command not found.\nRun "brew install postgis" in terminal to install.')
+            self.write_log('ERROR: pgsql2shp command not found.\nRun "brew install postgis" in terminal to install.')
             self.alert('Error', 'pgsql2shp command not found.\nRun "brew install postgis" in terminal to install.', 'critical')
 
         try:
