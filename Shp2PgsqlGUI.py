@@ -1,8 +1,8 @@
-#!/usr/local/bin/python3
+#!/usr/local/bin/python2
 
 import sys, os, threading, psycopg2, time
 from PyQt5 import QtCore, QtWidgets, QtGui
-from subprocess import check_output
+from subprocess import check_output, call
 from mainwindow import Ui_MainWindow
 
 class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
@@ -18,16 +18,31 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
         self.connection = None
         self.counter = 0
         self.file_count = 0
+        self.threads = {}
+        self.selected_rows = []
+        self.home = os.path.expanduser('~')
 
     def initUi(self):
         self.btn_test.clicked.connect(self.connect)
-        self.btn_import.clicked.connect(self.execute)
+        self.btn_import.clicked.connect(self.import_)
         self.btn_add.clicked.connect(self.add_file)
-        self.btn_clear.clicked.connect(self.clear_table)
+        self.btn_clear.clicked.connect(lambda: self.clear_table(1))
+        self.btn_clear2.clicked.connect(lambda: self.clear_table(2))
         self.btn_save_log.clicked.connect(self.save_log)
+        self.btn_remove.setVisible(False)
+        self.btn_remove.clicked.connect(lambda: self.remove_selected(1))
+        self.btn_remove2.setVisible(False)
+        self.btn_remove2.clicked.connect(lambda: self.remove_selected(2))
+        self.btn_fetch.clicked.connect(self.fetch_table)
+        self.btn_export.clicked.connect(self.export_)
+
+        self.tbl_table.cellDoubleClicked.connect(self.export_dest)
 
         self.act_add.triggered.connect(self.add_file)
         self.act_about.triggered.connect(self.show_about)
+
+        self.tbl_file.itemSelectionChanged.connect(lambda: self.selection_changed(1))
+        self.tbl_table.itemSelectionChanged.connect(lambda: self.selection_changed(2))
 
         fixed_font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont)
         self.txt_log.setFont(fixed_font)
@@ -54,28 +69,90 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.alert('Error', 'Could not conect to database', 'critical')
 
     def add_file(self):
-        home = os.path.expanduser('~')
-        files, _ = QtWidgets.QFileDialog.getOpenFileNames(self, 'Choose shape file to import', home, 'ESRI Shapefiles (*.shp)')
+        files, _ = QtWidgets.QFileDialog.getOpenFileNames(self, 'Choose shape file to import', self.home, 'ESRI Shapefiles (*.shp)')
         if len(files):
-            self.tbl_file.setRowCount(len(files))
+            row_count = self.tbl_file.rowCount()
+            self.tbl_file.setRowCount(len(files) + row_count)
 
             for i, file in enumerate(files):
-                self.tbl_file.setItem(i, 0, QtWidgets.QTableWidgetItem(file))
-                self.tbl_file.setItem(i, 1, QtWidgets.QTableWidgetItem('public'))
-                self.tbl_file.setItem(i, 2, QtWidgets.QTableWidgetItem(os.path.basename(os.path.splitext(file)[0]).lower()))
-                self.tbl_file.setItem(i, 3, QtWidgets.QTableWidgetItem('geom'))
-                self.tbl_file.setItem(i, 4, QtWidgets.QTableWidgetItem('4326'))
+                self.tbl_file.setItem(i + row_count, 0, QtWidgets.QTableWidgetItem(file))
+                self.tbl_file.setItem(i + row_count, 1, QtWidgets.QTableWidgetItem('public'))
+                self.tbl_file.setItem(i + row_count, 2, QtWidgets.QTableWidgetItem(os.path.basename(os.path.splitext(file)[0]).lower()))
+                self.tbl_file.setItem(i + row_count, 3, QtWidgets.QTableWidgetItem('geom'))
+                self.tbl_file.setItem(i + row_count, 4, QtWidgets.QTableWidgetItem('4326'))
 
             self.tbl_file.resizeColumnsToContents()
 
-    def clear_table(self):
-        self.tbl_file.clearContents()
-        self.tbl_file.setRowCount(0)
-        self.tbl_file.resizeColumnsToContents()
+    def clear_table(self, num):
+        if num == 1:
+            table = self.tbl_file
+        else:
+            table = self.tbl_table
+
+        table.clearContents()
+        table.setRowCount(0)
+        table.resizeColumnsToContents()
+
+    def selection_changed(self, num):
+        items = self.tbl_file.selectedItems() if num == 1 else self.tbl_table.selectedItems()
+        self.selected_rows = []
+        for item in items:
+            row = item.row()
+            if not row in self.selected_rows:
+                self.selected_rows.append(row)
+
+        if num == 1:
+            self.btn_remove.setVisible(len(self.selected_rows) > 0)
+        else:
+            self.btn_remove2.setVisible(len(self.selected_rows) > 0)
+
+    def remove_selected(self, num):
+        self.selected_rows.sort(reverse=True)
+        for row in self.selected_rows:
+            if num == 1:
+                self.tbl_file.removeRow(row)
+            else:
+                self.tbl_table.removeRow(row)
+        self.selected_rows = []
+
+    def fetch_table(self):
+        try:
+            self.connect(output=False)
+            if not self.connection:
+                self.alert('Error', 'No database connection', 'critical')
+                return
+        except Exception:
+            self.alert('Error', 'No database connection', 'critical')
+            return
+
+        cur = self.connection.cursor()
+        cur.execute("select table_schema, table_name from information_schema.tables where table_name != 'spatial_ref_sys' and table_schema not in ('pg_catalog', 'information_schema') and table_type = 'BASE TABLE'")
+        tables = cur.fetchall()
+
+        if tables:
+            self.tbl_table.setRowCount(len(tables))
+            for i, t in enumerate(tables):
+                self.tbl_table.setItem(i, 0, QtWidgets.QTableWidgetItem(t[0]))
+                self.tbl_table.setItem(i, 1, QtWidgets.QTableWidgetItem(t[1]))
+                self.tbl_table.setItem(i, 2, QtWidgets.QTableWidgetItem('geom'))
+                self.tbl_table.setItem(i, 3, QtWidgets.QTableWidgetItem(os.path.join(self.home, t[1] + '.shp')))
+        else:
+            self.write_log('No table found')
+
+        self.tbl_table.resizeColumnsToContents()
+        cur.close()
+        self.connection.close()
+        self.connection = None
+
+    def export_dest(self, row, col):
+        if col == 3:
+            file, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save As', self.home, 'ESRI Shapefile (*.shp)')
+            if file:
+                self.tbl_table.setItem(row, col, QtWidgets.QTableWidgetItem(file))
+                self.tbl_table.resizeColumnsToContents()
 
     def save_log(self):
-        home = os.path.expanduser('~')
-        file, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save As', home, 'Text File (*.txt)')
+        file, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save As', self.home, 'Text File (*.txt)')
         if file:
             file = open(file, 'w')
             file.write(self.txt_log.toPlainText())
@@ -85,13 +162,14 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
     def show_about(self):
         about = QtWidgets.QMessageBox(self)
         about.setWindowTitle('About')
-        about.setText('Shp2PgsqlGUI for macOS\n\nThis software helps you operating shp2pgsql in GUI mode.')
+        about.setText('Shp2PgsqlGUI for macOS\n\nThis software helps you operating shp2pgsql and pgsql2shp in GUI mode.')
         about.exec_()
 
-    def execute(self):
+    def import_(self):
         try:
             check_output(['shp2pgsql', '-?'])
-        except Exception as e:
+        except Exception:
+            self.write_log('shp2pgsql command not found.\nRun "brew install postgis" in terminal to install.')
             self.alert('Error', 'shp2pgsql command not found.\nRun "brew install postgis" in terminal to install.', 'critical')
 
         try:
@@ -126,6 +204,50 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.write_log(str(e))
 
+    def export_(self):
+        try:
+            check_output(['pgsql2shp', '-?'])
+        except Exception:
+            self.write_log('pgsql2shp command not found.\nRun "brew install postgis" in terminal to install.')
+            self.alert('Error', 'pgsql2shp command not found.\nRun "brew install postgis" in terminal to install.', 'critical')
+
+        try:
+            self.connect(output=False)
+            if not self.connection:
+                self.alert('Error', 'No database connection', 'critical')
+                return
+        except Exception:
+            self.alert('Error', 'No database connection', 'critical')
+            return
+
+        try:
+            self.counter = 0
+            self.file_count = self.tbl_table.rowCount()
+            self.threads = {}
+
+            self.btn_export.setDisabled(True)
+            self.btn_fetch.setDisabled(True)
+            self.btn_clear2.setDisabled(True)
+
+            host = self.fld_host.text()
+            port = self.fld_port.text()
+            dbname = self.fld_dbname.text()
+            user = self.fld_user.text()
+            password = self.fld_password.text()
+
+            for x in range(0, self.file_count):
+                schema = self.tbl_table.item(x, 0).text()
+                table = self.tbl_table.item(x, 1).text()
+                geom = self.tbl_table.item(x, 2).text()
+                dest = self.tbl_table.item(x, 3).text()
+
+                self.threads[x] = exportThread(host, port, dbname, user, password, schema, table, geom, dest)
+                self.threads[x].write_log.connect(self.write_log_slot)
+                self.threads[x].finished.connect(self.finish)
+                self.threads[x].start()
+        except Exception as e:
+            self.write_log(str(e))
+
     def alert(self, title, text, type):
         if type is 'warning':
             icon = QtWidgets.QMessageBox.Warning
@@ -146,16 +268,25 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
         self.txt_log.insertPlainText(text + '\n')
         self.txt_log.ensureCursorVisible()
 
-    @QtCore.pyqtSlot()
-    def finish(self):
+    @QtCore.pyqtSlot(int)
+    def finish(self, num):
         self.counter += 1
         if self.counter >= self.file_count:
-            self.btn_import.setDisabled(False)
-            self.btn_add.setDisabled(False)
-            self.btn_clear.setDisabled(False)
+            if num == 1:
+                self.btn_import.setDisabled(False)
+                self.btn_add.setDisabled(False)
+                self.btn_clear.setDisabled(False)
+            else:
+                self.btn_export.setDisabled(False)
+                self.btn_fetch.setDisabled(False)
+                self.btn_clear2.setDisabled(False)
+
             self.connection.close()
             self.connection = None
             self.write_log('Jobs done !!!')
+            self.counter = 0
+            self.file_count = 0
+            self.threads = {}
 
 
 
@@ -163,7 +294,7 @@ class importThread(QtCore.QThread):
     """docstring for importThread"""
 
     write_log = QtCore.pyqtSignal(str)
-    finished = QtCore.pyqtSignal()
+    finished = QtCore.pyqtSignal(int)
 
     def __init__(self, connection, path, schema, table, geom, srid):
         super(importThread, self).__init__()
@@ -197,7 +328,38 @@ class importThread(QtCore.QThread):
         except Exception:
             self.write_log.emit("An error occured during {} import.".format(self.path))
 
-        self.finished.emit()
+        self.finished.emit(1)
+
+
+class exportThread(QtCore.QThread):
+    """docstring for exportThread"""
+
+    write_log = QtCore.pyqtSignal(str)
+    finished = QtCore.pyqtSignal(int)
+
+    def __init__(self, host, port, dbname, user, password, schema, table, geom, dest):
+        super(exportThread, self).__init__()
+        self.host = host
+        self.port = port
+        self.dbname = dbname
+        self.user = user
+        self.password = password
+        self.schema = schema
+        self.table = table
+        self.geom = geom
+        self.dest = dest
+
+    def run(self):
+        self.write_log.emit("Exporting {}.{} to {}".format(self.schema, self.table, self.dest))
+        try:
+            output = check_output(['pgsql2shp', '-h', self.host, '-p', self.port, '-u', self.user, '-P', self.password, '-g', self.geom, '-f', self.dest, self.dbname, '{}.{}'.format(self.schema, self.table)])
+            self.write_log.emit(output)
+        except Exception:
+            self.write_log.emit("An error occured during {} import.".format(self.path))
+
+        self.finished.emit(2)
+
+
 
 
 
