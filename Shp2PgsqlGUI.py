@@ -130,14 +130,24 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
         tables = cur.fetchall()
 
         if tables:
-            self.tbl_table.setRowCount(len(tables))
-            for i, t in enumerate(tables):
-                self.tbl_table.setItem(i, 0, QtWidgets.QTableWidgetItem(t[0]))
-                self.tbl_table.setItem(i, 1, QtWidgets.QTableWidgetItem(t[1]))
-                self.tbl_table.setItem(i, 2, QtWidgets.QTableWidgetItem('geom'))
-                self.tbl_table.setItem(i, 3, QtWidgets.QTableWidgetItem(os.path.join(self.home, t[1] + '.shp')))
+            self.tbl_table.setRowCount(0)
+            for t in tables:
+                cur.execute("select column_name, udt_name from information_schema.columns where table_name='{}' and udt_name in ('geography', 'geometry')".format(t[1]))
+                geom = cur.fetchone()
+                if geom:
+                    row_count = self.tbl_table.rowCount()
+                    self.tbl_table.insertRow(row_count)
+                    self.tbl_table.setItem(row_count, 0, QtWidgets.QTableWidgetItem(t[0]))
+                    self.tbl_table.setItem(row_count, 1, QtWidgets.QTableWidgetItem(t[1]))
+                    self.tbl_table.setItem(row_count, 2, QtWidgets.QTableWidgetItem(geom[0]))
+                    self.tbl_table.setItem(row_count, 3, QtWidgets.QTableWidgetItem(os.path.join(self.home, t[1] + '.shp')))
+                    self.write_log('{} column found in table {}.{}. Adding table to list.'.format(geom[1], t[0], t[1]))
         else:
             self.write_log('No table found')
+
+        if not self.tbl_table.rowCount():
+            self.write_log('Could not find table with geography or geometry column.')
+            self.alert('Info', 'Could not find table with geography or geometry column.', 'info')
 
         self.tbl_table.resizeColumnsToContents()
         cur.close()
