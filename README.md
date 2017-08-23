@@ -1,6 +1,7 @@
 # Shp2PgsqlGUI for mac
 Run shp2pgsql in GUI mode. [shp2pgsql](http://www.bostongis.com/pgsql2shp_shp2pgsql_quickguide.bqg) command line interface is required
 
+![Shp2PgsqlGUI v0.2](/screenshot.png?raw=true "Shp2PgsqlGUI v0.2")
 
 ### Installation
 - Install postgis bundle using [Homebrew](https://brew.sh/). This bundle contains [shp2pgsql](http://www.bostongis.com/pgsql2shp_shp2pgsql_quickguide.bqg) cli
