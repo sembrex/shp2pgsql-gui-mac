@@ -1,12 +1,18 @@
-#!/usr/local/bin/python2
+# -*- coding: utf-8 -*-
 
-import sys, os, threading, psycopg2, time
-from PyQt5 import QtCore, QtWidgets, QtGui
-from subprocess import check_output, call
+import os
+import sys
+from subprocess import check_output
+
+from PyQt5 import QtCore, QtGui, QtWidgets
+
+import psycopg2
 from mainwindow import Ui_MainWindow
+
 
 class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
     """docstring for Shp2Pgsql"""
+
     def __init__(self):
         super(Shp2Pgsql, self).__init__()
         self.setupUi(self)
@@ -57,6 +63,11 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
         password = self.fld_password.text()
         dbname = self.fld_dbname.text()
 
+        if not dbname:
+            self.alert('Error', 'Database name is required', 'critical')
+            self.fld_dbname.setFocus()
+            return
+
         output = kwargs.get('output', True)
 
         try:
@@ -70,7 +81,8 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.alert('Error', 'Could not conect to database', 'critical')
 
     def add_file(self):
-        files, _ = QtWidgets.QFileDialog.getOpenFileNames(self, 'Choose shape file to import', self.home, 'ESRI Shapefiles (*.shp)')
+        files, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self, 'Choose shape file to import', self.home, 'ESRI Shapefiles (*.shp)')
         if len(files):
             row_count = self.tbl_file.rowCount()
             self.tbl_file.setRowCount(len(files) + row_count)
@@ -78,7 +90,8 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
             for i, file in enumerate(files):
                 self.tbl_file.setItem(i + row_count, 0, QtWidgets.QTableWidgetItem(file))
                 self.tbl_file.setItem(i + row_count, 1, QtWidgets.QTableWidgetItem('public'))
-                self.tbl_file.setItem(i + row_count, 2, QtWidgets.QTableWidgetItem(os.path.basename(os.path.splitext(file)[0]).lower()))
+                self.tbl_file.setItem(
+                    i + row_count, 2, QtWidgets.QTableWidgetItem(os.path.basename(os.path.splitext(file)[0]).lower()))
                 self.tbl_file.setItem(i + row_count, 3, QtWidgets.QTableWidgetItem('geom'))
                 self.tbl_file.setItem(i + row_count, 4, QtWidgets.QTableWidgetItem('4326'))
 
@@ -99,7 +112,7 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
         self.selected_rows = []
         for item in items:
             row = item.row()
-            if not row in self.selected_rows:
+            if row not in self.selected_rows:
                 self.selected_rows.append(row)
 
         if num == 1:
@@ -127,13 +140,21 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
             return
 
         cur = self.connection.cursor()
-        cur.execute("select table_schema, table_name from information_schema.tables where table_name != 'spatial_ref_sys' and table_schema not in ('pg_catalog', 'information_schema') and table_type = 'BASE TABLE'")
+        cur.execute('''
+        select table_schema, table_name from information_schema.tables
+        where table_name != 'spatial_ref_sys'
+        and table_schema not in ('pg_catalog', 'information_schema')
+        and table_type='BASE TABLE'
+        ''')
         tables = cur.fetchall()
 
         if tables:
             self.tbl_table.setRowCount(0)
             for t in tables:
-                cur.execute("select column_name, udt_name from information_schema.columns where table_name='{}' and udt_name in ('geography', 'geometry')".format(t[1]))
+                cur.execute('''
+                select column_name, udt_name from information_schema.columns
+                where table_name='{}' and udt_name in ('geography', 'geometry')
+                '''.format(t[1]))
                 geom = cur.fetchone()
                 if geom:
                     row_count = self.tbl_table.rowCount()
@@ -141,7 +162,8 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
                     self.tbl_table.setItem(row_count, 0, QtWidgets.QTableWidgetItem(t[0]))
                     self.tbl_table.setItem(row_count, 1, QtWidgets.QTableWidgetItem(t[1]))
                     self.tbl_table.setItem(row_count, 2, QtWidgets.QTableWidgetItem(geom[0]))
-                    self.tbl_table.setItem(row_count, 3, QtWidgets.QTableWidgetItem(os.path.join(self.home, t[1] + '.shp')))
+                    self.tbl_table.setItem(row_count, 3, QtWidgets.QTableWidgetItem(
+                        os.path.join(self.home, t[1] + '.shp')))
                     self.write_log('{} column found in table {}.{}. Adding table to list.'.format(geom[1], t[0], t[1]))
         else:
             self.write_log('No table found')
@@ -157,7 +179,9 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def export_dest(self, row, col):
         if col == 3:
-            file, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save As', self.home, 'ESRI Shapefile (*.shp)')
+            item = self.tbl_table.item(row, col)
+            file, _ = QtWidgets.QFileDialog.getSaveFileName(
+                self, 'Save As', item.text() or self.home, 'ESRI Shapefile (*.shp)')
             if file:
                 self.tbl_table.setItem(row, col, QtWidgets.QTableWidgetItem(file))
                 self.tbl_table.resizeColumnsToContents()
@@ -173,7 +197,9 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
     def show_about(self):
         about = QtWidgets.QMessageBox(self)
         about.setWindowTitle('About')
-        about.setText('Shp2PgsqlGUI for macOS\n\nThis software helps you operating shp2pgsql and pgsql2shp in GUI mode.')
+        about.setText(
+            'Shp2PgsqlGUI for macOS\n\nThis software helps you operating shp2pgsql and pgsql2shp in GUI mode.'
+        )
         about.exec_()
 
     def import_(self):
@@ -182,10 +208,13 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
             return
 
         try:
-            check_output(['shp2pgsql', '-?'])
+            check_output(['shp2pgsql'])
         except Exception:
             self.write_log('ERROR: shp2pgsql command not found. Run "brew install postgis" in terminal to install.')
-            self.alert('Error', 'shp2pgsql command not found.\nRun "brew install postgis" in terminal to install.', 'critical')
+            self.alert(
+                'Error',
+                'shp2pgsql command not found.\nRun "brew install postgis" in terminal to install.', 'critical'
+            )
 
         try:
             self.connect(output=False)
@@ -225,10 +254,13 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
             return
 
         try:
-            check_output(['pgsql2shp', '-?'])
+            check_output(['pgsql2shp'])
         except Exception:
             self.write_log('ERROR: pgsql2shp command not found.\nRun "brew install postgis" in terminal to install.')
-            self.alert('Error', 'pgsql2shp command not found.\nRun "brew install postgis" in terminal to install.', 'critical')
+            self.alert(
+                'Error',
+                'pgsql2shp command not found.\nRun "brew install postgis" in terminal to install.', 'critical'
+            )
 
         try:
             self.connect(output=False)
@@ -267,10 +299,10 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.write_log(str(e))
 
-    def alert(self, title, text, type):
-        if type is 'warning':
+    def alert(self, title, text, _type):
+        if _type is 'warning':
             icon = QtWidgets.QMessageBox.Warning
-        elif type is 'critical':
+        elif _type is 'critical':
             icon = QtWidgets.QMessageBox.Critical
         else:
             icon = QtWidgets.QMessageBox.Information
@@ -308,7 +340,6 @@ class Shp2Pgsql(QtWidgets.QMainWindow, Ui_MainWindow):
             self.threads = {}
 
 
-
 class importThread(QtCore.QThread):
     """docstring for importThread"""
 
@@ -329,7 +360,10 @@ class importThread(QtCore.QThread):
         try:
             args = ['shp2pgsql', '-c', '-g', self.geom, '-s', self.srid]
             cur = self.connection.cursor()
-            cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='{}' AND table_name='{}' AND table_type = 'BASE TABLE'".format(self.schema, self.table))
+            cur.execute('''
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema='{}' AND table_name='{}' AND table_type = 'BASE TABLE'
+            '''.format(self.schema, self.table))
 
             try:
                 row = cur.fetchone()
@@ -345,7 +379,7 @@ class importThread(QtCore.QThread):
             cur.close()
             self.write_log.emit("{} successfully imported to {}.{}".format(self.path, self.schema, self.table))
         except Exception as e:
-            self.write_log(str(e))
+            self.write_log.emit(str(e))
             self.write_log.emit("An error occured during {} import.".format(self.path))
 
         self.finished.emit(1)
@@ -371,17 +405,29 @@ class exportThread(QtCore.QThread):
 
     def run(self):
         self.write_log.emit("Exporting {}.{} to {}".format(self.schema, self.table, self.dest))
+        args = ['pgsql2shp',
+                '-h', self.host,
+                '-p', self.port,
+                '-g', self.geom,
+                '-f', self.dest
+                ]
+
+        if self.user:
+            args.extend(['-u', self.user])
+
+        if self.password:
+            args.extend(['-P', self.password])
+
+        args.extend([self.dbname, '{}.{}'.format(self.schema, self.table)])
+
         try:
-            output = check_output(['pgsql2shp', '-h', self.host, '-p', self.port, '-u', self.user, '-P', self.password, '-g', self.geom, '-f', self.dest, self.dbname, '{}.{}'.format(self.schema, self.table)])
+            output = check_output(args)
             self.write_log.emit(output)
         except Exception as e:
-            self.write_log(str(e))
+            self.write_log.emit(str(e))
             self.write_log.emit("An error occured during {}.{} export.".format(self.schema, self.table))
 
         self.finished.emit(2)
-
-
-
 
 
 if __name__ == '__main__':

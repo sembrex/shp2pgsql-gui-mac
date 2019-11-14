@@ -1,7 +1,11 @@
-/.DS_Store
 /build
 /dist
 *.pyc
 *.spec
 *.sublime-project
 *.sublime-workspace
+
+.vscode
+
+.DS_Store
+__pycache__
