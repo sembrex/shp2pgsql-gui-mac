@@ -422,7 +422,7 @@ class exportThread(QtCore.QThread):
 
         try:
             output = check_output(args)
-            self.write_log.emit(output)
+            self.write_log.emit(output.decode("utf-8", "ignore"))
         except Exception as e:
             self.write_log.emit(str(e))
             self.write_log.emit("An error occured during {}.{} export.".format(self.schema, self.table))
